@@ -1,0 +1,158 @@
+<script src="https://github.com/processing/p5.js/releases/download/0.4.23/p5.js"></script>
+<script type='text/javascript' src='p5-zip/addons/p5.dom.js'></script>
+<script language="javascript" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.4.23/addons/p5.sound.js"></script>
+<input type = 'text' value = "dB references in Noise" style="position:absolute; top:10px; left:8px; width:160px">  
+<input type = 'text' value = "80dB" style="position:absolute; top:120px; left:10px; width:40px"> 
+<input type = 'text' value = "60dB" style="position:absolute; top:200px; left:10px; width:40px"> 
+<input type = 'text' value = "40dB" style="position:absolute; top:260px; left:10px; width:40px"> 
+<input type = 'text' value = "Live Environment Data Point" style="position:absolute; top:350px; left:230px; width:180px"> 
+<style type="text/css">
+body {font-family:arial; color:white;}
+</style>
+<script> 
+
+var img;  // Declare variable 'img'.
+var message = "",
+	font,
+	bounds,// holds x,y,w,h of text's bounding box
+	fontsize=60,
+	x,y; //x-y coordinates of text
+var soundSlider;
+
+function preload() {
+
+  font = loadFont('LeagueGothic-Regular.otf');
+
+
+  song1 = loadSound('sound/jackhammer.mp3');
+  song2 = loadSound('sound/motor.mp3');
+  song3 = loadSound('sound/people.mp3');
+  song4 = loadSound('sound/nature.mp3');
+}
+
+function setup() {
+  // Sets the screen to be 640 pixels wide and 360 pixels high
+  createCanvas(720, 400);
+  background(0);
+
+  // setup the slider
+  soundSlider = createSlider(0, 255, 0);
+  
+  soundSlider.position(530, 330);
+
+  // setup the font
+  textFont(font);
+  textSize(fontsize);	
+
+  bounds = font.textBounds(message,0,0,fontsize);
+  x = width/2 - bounds.w/2;
+  y = height/2 - bounds.h/2;
+	  
+  // loading images
+  img = loadImage("all.jpg");
+
+  noSmooth();
+  stroke(255); //set line to white 
+  
+  // initializing mic
+  mic = new p5.AudioIn()
+  mic.start();
+}
+
+function draw() {
+  // Set the background to black and turn off the fill color
+  background(0);
+  image(img, 520, 60, img.width/2, img.height/3);
+  
+  // for message
+  fill(200);
+  text("Are you louder than a sonic Jet",160,50);
+  text(message,x,y);
+  bounds = font.textBounds(message,x,y,fontsize);
+
+  if ( mouseX >= bounds.x &&
+ mouseY >= bounds.y) {
+  
+       //song.play();
+       //song2.stop();	
+	
+  
+  }else if(mouseX <= bounds.x + bounds.w && mouseY <= bounds.y + bounds.h) {
+	//song.stop();
+ 	//song2.play();
+  }else{
+ 	//song.stop();
+	//song2.stop();
+
+} 
+
+ // slider to play music
+  var s = soundSlider.value();
+  textSize(15);
+  text("0dB",530,360);
+  text("100dB",630,360);
+  textSize(25);
+  text("sample",560,375);
+
+  if( s <= 51 ){
+	soundoff();
+  } else if( s <= 102) { 
+	song1.stop();
+	song2.stop();
+	song3.stop();
+	song4.play();
+  } else if(s <= 153) {
+        song4.stop();
+	song1.stop();
+	song2.stop();
+	song3.play();
+  } else if (s <= 204) {
+	song1.stop();
+	song3.stop();
+	song4.stop();
+	song2.play();
+  } else {
+	song3.stop();
+	song4.stop();
+ 	song2.stop();
+	song1.play();
+  }
+
+
+  // draw surrounding box
+  stroke(255);
+  line(80,60,520,60);
+  line(520,60,520,340);
+  line(80,60,80,340);
+  line(80,340,520,340);
+  
+  // drawing the levels
+  stroke(128);
+  line(40,120,540,120);
+  stroke(150);
+  line(40,260,540,260);
+  stroke(136);
+  line(40,200,540,200);
+  
+  textSize(18);
+  text("Sonic Boom (82dB) -----------------------------------------------------------------------",80,120);
+  text("Average Low Boom (41dB) -----------------------------------------------------------------",80,260);
+  text("Best Low Boom (23dB) --------------------------------------------------------------------",80,300);
+
+  //pointer of noise level
+  micLevel = mic.getLevel();
+  stroke(255);
+  fill(color(255,0,0))
+  ellipse(width/2-60, constrain(height-micLevel/2.5*height*5, 0, height)-60, 20, 20);
+}
+
+function soundoff(){
+	song1.stop();
+	song2.stop();
+	song3.stop();
+	song4.stop();
+}
+
+alert("Complete");
+
+</script>

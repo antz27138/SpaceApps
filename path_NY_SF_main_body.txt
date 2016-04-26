@@ -1,0 +1,371 @@
+// Sonic Boom vs. Low Boom Comparison Application
+// NASA Space Apps Challenge 2016, Melbourne
+// Team Sonic
+// Jiayi (George) Chen
+// Jia Hui Ong
+// Jordan Yim
+// Anton Tarasenko
+
+var viewer = new Cesium.Viewer('cesiumContainer', {
+    terrainProviderViewModels : [], //Disable terrain changing
+    infoBox : false, //Disable InfoBox widget
+    selectionIndicator : false //Disable selection indicator
+});
+
+//Enable lighting based on sun/moon positions
+viewer.scene.globe.enableLighting = true;
+
+//Use STK World Terrain
+viewer.terrainProvider = new Cesium.CesiumTerrainProvider({
+    url : 'https://assets.agi.com/stk-terrain/world',
+    requestWaterMask : false,
+    requestVertexNormals : true
+});
+
+//Enable depth testing so things behind the terrain disappear.
+viewer.scene.globe.depthTestAgainstTerrain = false;
+
+//Set the random number seed for consistent results.
+Cesium.Math.setRandomNumberSeed(3);
+
+//Set bounds of our simulation time
+var start = Cesium.JulianDate.fromDate(new Date(2016, 4, 24, 8));
+var stop = Cesium.JulianDate.addSeconds(start, 360, new Cesium.JulianDate());
+
+//Make sure viewer is at the desired time.
+viewer.clock.startTime = start.clone();
+viewer.clock.stopTime = 10;
+viewer.clock.currentTime = start.clone();
+viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP; //Loop at the end
+viewer.clock.multiplier = 0.3;
+
+Sandcastle.addDefaultToolbarButton('Show Cartographic Position on Mouse Over', function() {
+    var entity = viewer.entities.add({
+        label : {
+            show : false
+        }
+    });
+
+    var scene = viewer.scene;
+    var handler;
+    
+    // Mouse over the globe to see the cartographic position
+    handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+    handler.setInputAction(function(movement) {
+        var cartesian = viewer.camera.pickEllipsoid(movement.endPosition, scene.globe.ellipsoid);
+        if (cartesian) {
+            var cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+            var longitudeString = Cesium.Math.toDegrees(cartographic.longitude).toFixed(2);
+            var latitudeString = Cesium.Math.toDegrees(cartographic.latitude).toFixed(2);
+
+            entity.position = cartesian;
+            entity.label.show = true;
+            entity.label.text = '(' + longitudeString + ', ' + latitudeString + ')';
+        } else {
+            entity.label.show = false;
+        }
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+});
+
+//Set timeline to simulation bounds
+viewer.timeline.zoomTo(start, stop);
+
+var path_NY_SF = [
+        [-73.776661,40.639904,0],
+        [-76.106172,40.646008,36900],
+        [-77.434692,40.839800,40000],
+        [-77.689850,40.875114,40000],
+        [-77.992722,40.916250,40000],
+        [-78.427561,40.969683,40000],
+        [-80.156328,41.165122,40000],
+        [-80.416111,41.192153,40000],
+        [-81.577614,41.305597,40000],
+        [-82.161972,41.358056,40000],
+        [-83.664072,41.438522,40000],
+        [-84.152114,41.460411,40000],
+        [-84.646750,41.480492,40000],
+        [-86.027972,41.525186,40000],
+        [-87.208647,41.541811,40000],
+        [-88.318417,41.546417,40000],
+        [-89.336375,41.548003,40000],
+        [-91.613250,41.518964,40000],
+        [-93.648556,41.437611,40000],
+        [-98.353583,41.375722,40000],
+        [-101.221461,41.225103,40000],
+        [-102.983000,41.096667,40000],
+        [-107.924944,40.067417,40000],
+        [-112.505556,39.302222,40000],
+        [-113.439828,39.197139,40000],
+        [-118.384569,38.511478,40000],
+        [-119.484525,38.335747,30700],
+        [-120.488561,38.165583,20400],
+        [-122.375008,37.618674,0] 
+    ];
+
+//Generate the path from NY to SF
+function plotFlightPath(pathArray) {
+    var property = new Cesium.SampledPositionProperty();
+    for (var i = 0; i < pathArray.length; i += 1) {
+        var time = Cesium.JulianDate.addSeconds(start, i, new Cesium.JulianDate());
+        var lon = pathArray[i][0];
+        var lat = pathArray[i][1];
+        var height = pathArray[i][2];
+        var position = Cesium.Cartesian3.fromDegrees(lon, lat, height);
+        property.addSample(time, position);
+    }
+    return property;
+}
+
+//Compute the entity position property.
+var position = plotFlightPath(path_NY_SF);
+
+//Actually create the entity
+var entity = viewer.entities.add({
+
+    //Set the entity availability to the same interval as the simulation time.
+    availability : new Cesium.TimeIntervalCollection([new Cesium.TimeInterval({
+        start : start,
+        stop : stop
+    })]),
+
+    //Use our computed positions
+    position : position,
+
+    //Automatically compute orientation based on position movement.
+    orientation : new Cesium.VelocityOrientationProperty(position),
+
+    //Load the Cesium plane model to represent the entity
+    model : {
+        uri : '../../SampleData/models/CesiumAir/Cesium_Air.gltf',
+        minimumPixelSize : 64
+    },
+
+    //Show the path as a yellow line sampled in 1 second increments.
+    path : {
+        resolution : 1,
+        material : new Cesium.PolylineGlowMaterialProperty({
+            glowPower : 0.1,
+            color : Cesium.Color.YELLOW
+        }),
+        width : 10
+    }
+});
+
+//Add button to view the path from the top down
+Sandcastle.addDefaultToolbarButton('View Top Down', function() {
+    viewer.trackedEntity = undefined;
+    viewer.zoomTo(viewer.entities, new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90)));
+});
+
+
+//Add button to track the entity as it moves
+Sandcastle.addToolbarButton('View Aircraft', function() {
+    viewer.trackedEntity = entity;
+});
+
+
+//Add a combo box for selecting each interpolation mode.
+Sandcastle.addToolbarMenu([{
+    text : 'Interpolation: Linear Approximation',
+    onselect : function() {
+        entity.position.setInterpolationOptions({
+            interpolationDegree : 1,
+            interpolationAlgorithm : Cesium.LinearApproximation
+        });
+    }
+}, {
+    text : 'Interpolation: Lagrange Polynomial Approximation',
+    onselect : function() {
+        entity.position.setInterpolationOptions({
+            interpolationDegree : 5,
+            interpolationAlgorithm : Cesium.LagrangePolynomialApproximation
+        });
+    }
+}], 'interpolationMenu');
+
+
+viewer.entities.add({
+    position : Cesium.Cartesian3.fromDegrees(-73.77666109,	40.6399042),
+    label : {
+        text : 'New York City'
+    }
+});
+
+viewer.entities.add({
+    position : Cesium.Cartesian3.fromDegrees(-122.3750076,	37.61867421),
+    label : {
+        text : 'San Francisco'
+    }
+});
+
+viewer.zoomTo(viewer.entities); 
+
+var redCorridor = {};
+var greenCorridor = {};
+
+//Add red corridor button
+Sandcastle.addToolbarButton('Sonic Boom', function() {
+    
+        //Sandcastle.reset = function() {
+            viewer.entities.remove(greenCorridor);
+        //};
+    
+    redCorridor = viewer.entities.add({
+    name : 'Red corridor on surface with rounded corners and outline',
+    corridor : {
+        positions : Cesium.Cartesian3.fromDegreesArray([
+                                                        -73.77666109,	40.6399042,
+                                                        -76.106172,	40.646008,
+                                                        -77.434692,	40.8398,
+                                                        -77.68985,	40.875114,
+                                                        -77.99272222,	40.91625,
+                                                        -78.427561,	40.969683,
+                                                        -80.156328,	41.165122,
+                                                        -80.416111,	41.192153,
+                                                        -81.534158,	41.301558,
+                                                        -81.577614,	41.305597,
+                                                        -82.16197222,	41.35805556,
+                                                        -83.664072,	41.438522,
+                                                        -84.152114,	41.460411,
+                                                        -84.64675,	41.480492,
+                                                        -86.027972,	41.525186,
+                                                        -87.208647,	41.541811,
+                                                        -88.31841667,	41.54641667,
+                                                        -89.336375,	41.548003,
+                                                        -91.61325,	41.51896389,
+                                                        -93.64855556,	41.43761111,
+                                                        -98.35358333,	41.37572222,
+                                                        -101.221461,	41.225103,
+                                                        -102.983,	41.09666667,
+                                                        -107.9249444,	40.06741667,
+                                                        -112.5055556,	39.30222222,
+                                                        -113.439828,	39.197139,
+                                                        -118.0328611,	38.56530556,
+                                                        -118.384569,	38.511478,
+                                                        -119.484525,	38.335747,
+                                                        -120.488561,	38.165583,
+                                                        -122.3750076,	37.61867421,
+                                                        ]),
+        width : 20000.0,
+        material : Cesium.Color.RED.withAlpha(0.5),
+        outline : true,
+        outlineColor : Cesium.Color.RED
+    }
+});
+});
+            
+//Add green corridor button
+Sandcastle.addToolbarButton('Low Boom', function() {
+    
+        //Sandcastle.reset = function() {
+            viewer.entities.remove(redCorridor);
+        //};
+    
+    greenCorridor = viewer.entities.add({
+    name : 'Green corridor on surface with rounded corners and outline',
+    corridor : {
+        positions : Cesium.Cartesian3.fromDegreesArray([
+                                                        -73.77666109,	40.6399042,
+                                                        -76.106172,	40.646008,
+                                                        -77.434692,	40.8398,
+                                                        -77.68985,	40.875114,
+                                                        -77.99272222,	40.91625,
+                                                        -78.427561,	40.969683,
+                                                        -80.156328,	41.165122,
+                                                        -80.416111,	41.192153,
+                                                        -81.534158,	41.301558,
+                                                        -81.577614,	41.305597,
+                                                        -82.16197222,	41.35805556,
+                                                        -83.664072,	41.438522,
+                                                        -84.152114,	41.460411,
+                                                        -84.64675,	41.480492,
+                                                        -86.027972,	41.525186,
+                                                        -87.208647,	41.541811,
+                                                        -88.31841667,	41.54641667,
+                                                        -89.336375,	41.548003,
+                                                        -91.61325,	41.51896389,
+                                                        -93.64855556,	41.43761111,
+                                                        -98.35358333,	41.37572222,
+                                                        -101.221461,	41.225103,
+                                                        -102.983,	41.09666667,
+                                                        -107.9249444,	40.06741667,
+                                                        -112.5055556,	39.30222222,
+                                                        -113.439828,	39.197139,
+                                                        -118.0328611,	38.56530556,
+                                                        -118.384569,	38.511478,
+                                                        -119.484525,	38.335747,
+                                                        -120.488561,	38.165583,
+                                                        -122.3750076,	37.61867421,
+                                                        ]),
+        width : 20000.0,
+        material : Cesium.Color.GREEN.withAlpha(0.5),
+        outline : true,
+        outlineColor : Cesium.Color.GREEN
+    }
+});
+});
+
+viewer.zoomTo(viewer.entities);
+                    
+    var position = Cesium.Cartesian3.fromDegrees(-74.0466891, 40.6892494, 0);
+    var heading = Cesium.Math.toRadians(135);
+    var pitch = 0;
+    var roll = 0;
+    var orientation = Cesium.Transforms.headingPitchRollQuaternion(position, heading, pitch, roll);
+
+    viewer.entities.add({
+        name : "New York:",
+        position : position,
+        orientation : orientation,
+        model : {
+            uri : "http://adi2412.github.io/Cesium-wonders/models/LibertyStatue/B_ldm_newyorkStatueLiberty_T3.gltf",
+            minimumPixelSize : 128,
+            maximumScale : 200
+        }
+    });
+
+viewer.entities.add({
+    name : 'Red box with black outline',
+    position: Cesium.Cartesian3.fromDegrees(-122.4612121, 37.7483199, 4000),
+    box : {
+        dimensions : new Cesium.Cartesian3(2000.0, 2000.0, 8000.0),
+        material : Cesium.Color.GREY,
+        outline : true,
+        outlineColor : Cesium.Color.GREY
+    }
+});
+
+viewer.entities.add({
+    name : 'Red box with black outline',
+    position: Cesium.Cartesian3.fromDegrees(-122.4612121, 37.7243199, 2000),
+    box : {
+        dimensions : new Cesium.Cartesian3(2000.0, 1000.0, 4000.0),
+        material : Cesium.Color.GREY,
+        outline : true,
+        outlineColor : Cesium.Color.GREY
+    }
+});
+
+viewer.entities.add({
+    name : 'Red box with black outline',
+    position: Cesium.Cartesian3.fromDegrees(-122.4612121, 37.7083199, 4000),
+    box : {
+        dimensions : new Cesium.Cartesian3(2000.0, 2000.0, 8000.0),
+        material : Cesium.Color.GREY,
+        outline : true,
+        outlineColor : Cesium.Color.GREY
+    }
+});
+
+var redCone = viewer.entities.add({
+    name : 'Red cone',
+    position: Cesium.Cartesian3.fromDegrees(-122.4612121, 37.6783199, 2000),
+    cylinder : {
+        length : 4000.0,
+        topRadius : 0.0,
+        bottomRadius : 1500.0,
+        material : Cesium.Color.GREY
+    }
+});
+
+viewer.zoomTo(viewer.entities);
